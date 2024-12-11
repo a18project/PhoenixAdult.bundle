@@ -81,6 +81,8 @@ def update(metadata, lang, siteNum, movieGenres, movieActors, art):
     # Actor(s)
     if 'pornplus' or 'tiny4k' in sceneURL:
         actors = detailsPageElements.xpath('//div[contains(@class, "space-y-4 p-4")]//a[contains(@href, "/models/")]')
+    elif 'holed' or 'castingcouch' or 'lubed' in sceneURL:
+        actors = detailsPageElements.xpath('//a[contains(@href, "/models/") and contains(@class, "font-semibold")]')
     else:
         actors = detailsPageElements.xpath('//div[@id="t2019-sinfo"]//a[contains(@href, "/girls/")]')
     if actors:
