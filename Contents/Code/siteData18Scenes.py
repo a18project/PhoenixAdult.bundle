@@ -223,7 +223,7 @@ def update(metadata, lang, siteNum, movieGenres, movieActors, movieCollections, 
     if subsite_a:
         subSite = first_text(subsite_a)
 
-    if subSite.lower() in ['brazzers', 'bangbros']:
+    if subSite and subSite.lower() in ['brazzers', 'bangbros']:
         subsite_text = detailsPageElements.xpath('//b[contains(., "Network")]//following-sibling::text()')
         if len(subsite_text) > 2:
             candidate = subsite_text[2].split('|')[-1].strip()
