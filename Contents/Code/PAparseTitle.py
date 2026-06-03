@@ -41,7 +41,7 @@ class TitleCaseEngine(object):
     ])
 
     NAME_EXCEPTION_SITES = set([
-        '912', '13671' '1411', '1600', '1685'
+        '912', '1367', '1411', '1600', '1685'
     ])
 
     CONTRACTION_EXCEPTIONS = set([
