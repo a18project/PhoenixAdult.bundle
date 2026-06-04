@@ -237,11 +237,13 @@ def update(metadata, lang, siteNum, movieGenres, movieActors, movieCollections, 
     movieName = first_text(detailsPageElements.xpath('//p[contains(., "Movie:")]//text()[contains(., "Movie:")]/following::a[1]'), default=None)
 
     # Tagline
+    tagline = ''
     if len(metadata_id) > 3:
         tagline = first_text(detailsPageElements.xpath('//p[contains(., "Serie")]//a[@title]'))
         metadata.title = "%s [Scene %s]" % (metadata_id[3], metadata_id[4])
     else:
-        tagline = siteName or (subSite if studio.replace(' ', '').lower() != subSite.replace(' ', '').lower() else None) or serieName or movieName or ''
+        if subSite:
+            tagline = siteName or (subSite if studio.replace(' ', '').lower() != subSite.replace(' ', '').lower() else None) or serieName or movieName or ''
 
     tagline = PAutils.parseTitle(tagline, siteNum)
 
