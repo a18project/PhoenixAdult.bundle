@@ -10,28 +10,40 @@ def getDatafromAPI(url, query, variables, referer):
     params = json.dumps({'query': query, 'variables': json.loads(variables)})
     req = PAutils.HTTPRequest(url, params=params, headers=headers)
 
-    if req:
-        return req.json()['data']
+    if req and req.ok:
+        try:
+            return req.json()['data']
+        except Exception:
+            pass
 
-    return req
+    return None
 
 
 def search(results, lang, siteNum, searchData):
     sceneID = None
     parts = searchData.title.split()
-    if unicode(parts[0], 'UTF-8').isdigit() and len(parts[0]) > 4:
-        sceneID = parts[0]
+    first_part = parts[0] if parts else ''
+    
+    is_digit = False
+    try:
+        is_digit = first_part.isdigit()
+    except Exception:
+        pass
+
+    if is_digit and len(first_part) > 4:
+        sceneID = first_part
         searchData.title = searchData.title.replace(sceneID, '', 1).strip()
 
         search_variables = json.dumps({'videoId': sceneID, 'site': PAsearchSites.getSearchSiteName(siteNum).upper()})
         searchResult = getDatafromAPI(PAsearchSites.getSearchSearchURL(siteNum), search_id_query, search_variables, PAsearchSites.getSearchBaseURL(siteNum))
-        if searchResult:
-            titleNoFormatting = PAutils.parseTitle(searchResult['findOneVideo']['title'], siteNum)
-            releaseDate = parse(searchResult['findOneVideo']['releaseDate']).strftime('%Y-%m-%d')
-            curID = PAutils.Encode(searchResult['findOneVideo']['slug'])
-            videoID = int(searchResult['findOneVideo']['videoId'])
+        if searchResult and 'findOneVideo' in searchResult and searchResult['findOneVideo']:
+            video = searchResult['findOneVideo']
+            titleNoFormatting = PAutils.parseTitle(video['title'], siteNum)
+            releaseDate = parse(video['releaseDate']).strftime('%Y-%m-%d')
+            curID = PAutils.Encode(video['slug'])
+            videoID = str(video['videoId'])
 
-            if int(sceneID) == videoID:
+            if str(sceneID) == videoID:
                 score = 100
             elif searchData.date:
                 score = 100 - Util.LevenshteinDistance(searchData.date, releaseDate)
@@ -42,11 +54,12 @@ def search(results, lang, siteNum, searchData):
     else:
         search_variables = json.dumps({'query': searchData.title, 'site': PAsearchSites.getSearchSiteName(siteNum).upper(), 'first': 10, 'skip': 0})
         searchResults = getDatafromAPI(PAsearchSites.getSearchSearchURL(siteNum), search_query, search_variables, PAsearchSites.getSearchBaseURL(siteNum))
-        if searchResults:
+        if searchResults and 'searchVideos' in searchResults and searchResults['searchVideos']:
             for searchResult in searchResults['searchVideos']['edges']:
-                titleNoFormatting = PAutils.parseTitle(searchResult['node']['title'], siteNum)
-                releaseDate = parse(searchResult['node']['releaseDate']).strftime('%Y-%m-%d')
-                curID = PAutils.Encode(searchResult['node']['slug'])
+                node = searchResult['node']
+                titleNoFormatting = PAutils.parseTitle(node['title'], siteNum)
+                releaseDate = parse(node['releaseDate']).strftime('%Y-%m-%d')
+                curID = PAutils.Encode(node['slug'])
 
                 if searchData.date:
                     score = 100 - Util.LevenshteinDistance(searchData.date, releaseDate)
@@ -64,14 +77,17 @@ def update(metadata, lang, siteNum, movieGenres, movieActors, movieCollections, 
 
     update_variables = json.dumps({'slug': sceneName, 'site': PAsearchSites.getSearchSiteName(siteNum).upper()})
     detailsPageElements = getDatafromAPI(PAsearchSites.getSearchSearchURL(siteNum), update_query, update_variables, PAsearchSites.getSearchBaseURL(siteNum))
+    if not detailsPageElements or 'findOneVideo' not in detailsPageElements or not detailsPageElements['findOneVideo']:
+        return metadata
+
     video = detailsPageElements['findOneVideo']
-    pictureset = video['carousel']
+    pictureset = video.get('carousel', [])
 
     # Title
     metadata.title = PAutils.parseTitle(video['title'], siteNum)
 
     # Summary
-    metadata.summary = video['description']
+    metadata.summary = video.get('description', '')
 
     # Studio
     metadata.studio = PAsearchSites.getSearchSiteName(siteNum).title()
@@ -80,50 +96,59 @@ def update(metadata, lang, siteNum, movieGenres, movieActors, movieCollections, 
     movieCollections.addCollection(metadata.studio)
 
     # Release Date
-    date_object = parse(video['releaseDate'])
-    metadata.originally_available_at = date_object
-    metadata.year = metadata.originally_available_at.year
+    if 'releaseDate' in video and video['releaseDate']:
+        date_object = parse(video['releaseDate'])
+        metadata.originally_available_at = date_object
+        metadata.year = metadata.originally_available_at.year
 
     # Genres
-    if metadata.studio == 'Tushy' or metadata.studio == 'TushyRaw':
+    if metadata.studio in ['Tushy', 'Tushyraw', 'TushyRaw']:
         movieGenres.addGenre('Anal')
 
-    if video['categories']:
+    if video.get('categories'):
         for tag in video['categories']:
             genreName = tag['name']
-
             movieGenres.addGenre(genreName)
 
     # Actor(s)
-    actors = video['models']
+    actors = video.get('models', [])
     for actor in actors:
         actorName = actor['name']
         actorPhotoURL = ''
-        if actor['images']:
-            actorPhotoURL = actor['images']['listing'][0]['highdpi']['double']
+        if actor.get('images') and actor['images'].get('listing'):
+            try:
+                actorPhotoURL = actor['images']['listing'][0]['highdpi']['double']
+            except (KeyError, IndexError):
+                pass
 
         movieActors.addActor(actorName, actorPhotoURL)
 
     # Director
-    if video['directors']:
+    if video.get('directors'):
         directorName = video['directors'][0]['name']
-
         movieActors.addDirector(directorName, '')
 
     # Posters
-    for name in ['movie', 'poster']:
-        if name in video['carousel'] and video['images'][name]:
-            image = video['images'][name][-1]
-            if 'highdpi' in image:
-                art.append(image['highdpi']['3x'])
-            else:
-                art.append(image['src'])
-            break
+    if video.get('images'):
+        for name in ['movie', 'poster']:
+            if name in video['images'] and video['images'][name]:
+                try:
+                    image = video['images'][name][-1]
+                    if 'highdpi' in image:
+                        art.append(image['highdpi']['3x'])
+                    else:
+                        art.append(image['src'])
+                    break
+                except (KeyError, IndexError):
+                    pass
 
-    for image in pictureset:
-        img = image['listing'][0]['highdpi']['triple']
-
-        art.append(img)
+    if pictureset:
+        for image in pictureset:
+            try:
+                img = image['listing'][0]['highdpi']['triple']
+                art.append(img)
+            except (KeyError, IndexError):
+                pass
 
     images = []
     posterExists = False
@@ -132,21 +157,18 @@ def update(metadata, lang, siteNum, movieGenres, movieActors, movieCollections, 
         cleanUrl = posterUrl.split('?')[0]
         art[idx - 1] = cleanUrl
         if not PAsearchSites.posterAlreadyExists(cleanUrl, metadata):
-            # Download image file for analysis
             try:
                 image = PAutils.HTTPRequest(posterUrl)
-                im = StringIO(image.content)
-                resized_image = Image.open(im)
-                width, height = resized_image.size
-                # Add the image proxy items to the collection
-                if height > width:
-                    # Item is a poster
-                    metadata.posters[cleanUrl] = Proxy.Media(image.content, sort_order=idx)
-                    posterExists = True
-                if width > height:
-                    # Item is an art item
-                    images.append((image, cleanUrl))
-                    metadata.art[cleanUrl] = Proxy.Media(image.content, sort_order=idx)
+                if image and image.ok:
+                    im = StringIO(image.content)
+                    resized_image = Image.open(im)
+                    width, height = resized_image.size
+                    if height > width:
+                        metadata.posters[cleanUrl] = Proxy.Media(image.content, sort_order=idx)
+                        posterExists = True
+                    if width > height:
+                        images.append((image, cleanUrl))
+                        metadata.art[cleanUrl] = Proxy.Media(image.content, sort_order=idx)
             except:
                 pass
         elif PAsearchSites.posterOnlyAlreadyExists(cleanUrl, metadata):
@@ -158,9 +180,7 @@ def update(metadata, lang, siteNum, movieGenres, movieActors, movieCollections, 
                 im = StringIO(image.content)
                 resized_image = Image.open(im)
                 width, height = resized_image.size
-                # Add the image proxy items to the collection
                 if width > 1:
-                    # Item is a poster
                     metadata.posters[cleanUrl] = Proxy.Media(image.content, sort_order=idx)
             except:
                 pass
@@ -168,6 +188,7 @@ def update(metadata, lang, siteNum, movieGenres, movieActors, movieCollections, 
     return metadata
 
 
-search_query = 'query getSearchResults($query:String!,$site:Site!,$first:Int,$skip:Int){searchVideos(input:{query:$query,site:$site,first:$first,skip:$skip}){edges{node{videoId title releaseDate slug images{listing{src}}}}}}'
-update_query = 'query getSearchResults($slug:String!,$site:Site!){findOneVideo(input:{slug:$slug,site:$site}){videoId title description releaseDate models{name slug images{listing{highdpi{double}}}}directors{name}categories{name}carousel{listing{highdpi{triple}}}}}'
-search_id_query = 'query getSearchResults($videoId:ID!,$site:Site!){findOneVideo(input:{videoId:$videoId,site:$site}){videoId title releaseDate slug}}'
+search_query = 'query getSearchResults($query: String!, $site: Site!, $first: Int, $skip: Int) { searchVideos(input: {query: $query, site: $site, first: $first, skip: $skip}) { edges { node { videoId title releaseDate slug images { listing { src } } } } } }'
+update_query = 'query getSearchResults($slug: String!, $site: Site!) { findOneVideo(input: {slug: $slug, site: $site}) { videoId title description releaseDate models { name slug images { listing { highdpi { double } } } } directors { name } categories { name } carousel { listing { highdpi { triple } } } } }'
+search_id_query = 'query getSearchResults($videoId: ID!, $site: Site!) { findOneVideo(input: {videoId: $videoId, site: $site}) { videoId title releaseDate slug } }'
+
