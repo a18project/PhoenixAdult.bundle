@@ -23,7 +23,7 @@ def search(results, lang, siteNum, searchData):
     sceneID = None
     parts = searchData.title.split()
     first_part = parts[0] if parts else ''
-    
+
     is_digit = False
     try:
         is_digit = first_part.isdigit()
@@ -191,4 +191,3 @@ def update(metadata, lang, siteNum, movieGenres, movieActors, movieCollections, 
 search_query = 'query getSearchResults($query: String!, $site: Site!, $first: Int, $skip: Int) { searchVideos(input: {query: $query, site: $site, first: $first, skip: $skip}) { edges { node { videoId title releaseDate slug images { listing { src } } } } } }'
 update_query = 'query getSearchResults($slug: String!, $site: Site!) { findOneVideo(input: {slug: $slug, site: $site}) { videoId title description releaseDate models { name slug images { listing { highdpi { double } } } } directors { name } categories { name } carousel { listing { highdpi { triple } } } } }'
 search_id_query = 'query getSearchResults($videoId: ID!, $site: Site!) { findOneVideo(input: {videoId: $videoId, site: $site}) { videoId title releaseDate slug } }'
-

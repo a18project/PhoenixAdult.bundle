@@ -16,7 +16,7 @@ def search(results, lang, siteNum, searchData):
         searchResults = HTML.ElementFromString(req.text)
         for searchResult in searchResults.xpath('//div[contains(@class, "search-scene-card")] | //div[@class="grid-item"]'):
             releaseDate = titleNoFormatting = ''
-            
+
             href = searchResult.xpath('.//a[contains(@class, "jj-card-thumb")]/@href | .//a/@href')
             if not href:
                 continue
@@ -166,4 +166,3 @@ def update(metadata, lang, siteNum, movieGenres, movieActors, movieCollections, 
             pass
 
     return metadata
-
